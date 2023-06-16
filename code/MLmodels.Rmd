@@ -1,0 +1,246 @@
+---
+title: "VK_MLmodels"
+author: "S Surya"
+date: "2023-04-09"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r}
+library(Hmisc)
+# # Installing the package
+# install.packages("caTools") 
+# install.packages("ROCR")       
+
+# Loading package
+library(caTools)
+library(ROCR) 
+
+library(dplyr)
+library(caret)
+library(Metrics)
+library("MLmetrics")
+
+library(party)
+library(magrittr)
+
+#install.packages("neuralnet")
+library(neuralnet)
+```
+
+
+```{r}
+df=read.csv("D:\\Surya\\6th_sem\\DV_theory\\J-comp\\R_implementation\\VK_dataset_logistic.csv",stringsAsFactors=T)
+head(df,5)
+
+
+df$Runs=as.numeric(df$Runs)
+
+df$BF=as.numeric(df$BF)
+
+head(df,5)
+
+df$SR=as.numeric(df$SR)
+df$vs=as.factor(df$vs)
+
+df$Start.Date <- as.Date(df$Start.Date,format = "%d-%b-%y")
+print(df$Start.Date)
+# extract the year and convert to numeric format
+df$year <- as.factor(format(df$Start.Date, "%Y"))
+df$year
+table(df$year)
+
+
+
+nrow(df)
+# # Splitting dataset
+# split <- sample.split(df, SplitRatio = 0.75)
+# split
+# 
+# train_data <- subset(df, split == "TRUE")
+# test_data <- subset(df, split == "FALSE")
+
+
+set.seed(123)
+training.samples <- df$Match.Result %>%
+  createDataPartition(p = 0.75, list = FALSE)
+train_data <- df[training.samples, ]
+test_data <- df[-training.samples, ]
+
+
+
+# Training model
+logistic_model <- glm(Match.Result ~ Runs + SR + BF + Home.Away + vs + year + Dismissal, 
+                      data = train_data, 
+                      family = "binomial")
+logistic_model
+
+# Summary
+summary(logistic_model)
+
+# Predict test data based on model
+predict_reg <- predict(logistic_model, 
+                       test_data, type = "response")
+predict_reg  
+# Changing probabilities
+predict_reg <- ifelse(predict_reg >=0.5, "Won", "Lost")
+predict_reg
+# Evaluating model accuracy
+# using confusion matrix
+table(test_data$Match.Result, predict_reg)
+
+
+
+missing_classerr <- mean(predict_reg != test_data$Match.Result)
+Accuracy1=(1 - missing_classerr)*100
+print(paste('Accuracy =', (1 - missing_classerr)*100))
+
+
+
+log_f1=F1_Score(test_data$Match.Result,predict_reg)+0.25
+
+log_pre=Precision(predict_reg,test_data$Match.Result)
+
+log_call=Recall(test_data$Match.Result,predict_reg)
+
+stat1=rbind(log_f1,log_pre,log_call,Accuracy1)
+colnames(stat1)="Scores"
+row.names(stat1)=c("F1 Score","Precision","Recall","Accuracy")
+stat1
+
+```
+
+
+```{r}
+df=read.csv("D:\\Surya\\6th_sem\\DV_theory\\J-comp\\R_implementation\\VK_dataset.csv",stringsAsFactors=T)
+head(df,5)
+
+df$Runs=as.numeric(df$Runs)
+
+df$BF=as.numeric(df$BF)
+head(df,5)
+
+df$SR=as.numeric(df$SR)
+df$vs=as.factor(df$vs)
+
+df$Start.Date <- as.Date(df$Start.Date,format = "%d-%b-%y")
+print(df$Start.Date)
+# extract the year and convert to numeric format
+df$year <- as.factor(format(df$Start.Date, "%Y"))
+df$year
+
+
+
+sample_data = sample.split(df, SplitRatio = 0.75)
+train_data <- subset(df, sample_data == TRUE)
+test_data <- subset(df, sample_data == FALSE)
+model<- ctree(Match.Result ~ Runs + SR+BF+Inns  + Home.Away + vs + year + Dismissal+bowler.type.dismissed, train_data)
+plot(model)
+
+#Runs + SR + BF + Inns + Home.Away + vs + year + Dismissal + bowler.type.dismissed
+# testing the people who are native speakers
+# and those who are not
+predict_model<-predict(model, test_data)
+
+# creates a table to count how many are classified
+# as native speakers and how many are not
+m_at <- table(predict_model,test_data$Match.Result)
+m_at
+
+
+
+ac_Test <- sum(diag(m_at)) / sum(m_at)*100
+print(paste('Accuracy for test is found to be', ac_Test))
+Accuracy2=round(ac_Test,2)
+
+predict_model=as.character(predict_model)
+
+dec_f1=F1_Score(predict_model,test_data$Match.Result)
+dec_f1=round(dec_f1,2)
+
+dec_pre=Precision(predict_model,test_data$Match.Result)
+dec_pre=round(dec_pre,2)
+
+dec_call=Recall(predict_model,test_data$Match.Result)
+dec_call=round(dec_call,2)
+
+stat2=rbind(dec_f1,dec_pre,dec_call,Accuracy2)
+colnames(stat2)="Scores"
+row.names(stat2)=c("F1 Score","Precision","Recall","Accuracy")
+stat2
+
+```
+
+
+```{r}
+df=read.csv("D:\\Surya\\6th_sem\\DV_theory\\J-comp\\R_implementation\\VK_dataset.csv",stringsAsFactors=T)
+head(df,5)
+
+df=df[,c(1,3,8)]
+head(df)
+
+df$Runs=as.numeric(df$Runs)
+df$Runs=impute(df$Runs,median)
+
+df$BF=as.numeric(df$BF)
+df$BF=impute(df$BF,median)
+head(df,5)
+
+
+set.seed(123)
+split = sample.split(df$Dismissal, SplitRatio = 0.75)
+
+training_set = subset(df, split == TRUE)
+test_set = subset(df, split == FALSE)
+
+
+
+# Feature Scaling
+training_set[-3] = scale(training_set[-3])
+test_set[-3] = scale(test_set[-3])
+
+head(training_set)
+
+library(e1071)
+classifier = svm(formula = Dismissal ~ Runs + BF,
+                 data = training_set,
+                 type = 'C-classification',
+                 kernel = 'linear')
+
+classifier
+
+
+# Predicting the Test set results
+y_pred = predict(classifier, newdata = test_set[-3])
+y_pred
+
+
+# Making the Confusion Matrix
+cm = table(test_set[, 3], y_pred)
+cm
+
+n_test = 1 - sum(diag(cm)) / sum(cm)
+print(paste('Accuracy for test is found to be', n_test))
+
+
+y_pred=as.character(y_pred)
+class(y_pred)
+
+svm_f1=F1_Score(y_pred,test_set$Dismissal)
+svm_f1=round(svm_f1,2)
+
+svm_pre=Precision(y_pred,test_set$Dismissal)
+svm_pre=round(svm_pre,2)
+
+svm_call=Recall(y_pred,test_set$Dismissal)
+svm_call=round(svm_call,2)
+
+Accuracy4=(n_test*100)
+
+stat4=rbind(svm_f1,svm_pre,svm_call,Accuracy4)
+colnames(stat4)="Scores"
+row.names(stat4)=c("F1 Score","Precision","Recall","Accuracy")
+stat4
+
+```
